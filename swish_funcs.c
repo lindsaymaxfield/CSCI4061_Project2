@@ -176,40 +176,43 @@ int resume_job(strvec_t *tokens, job_list_t *jobs, int is_foreground) {
     // 6. Call tcsetpgrp(STDIN_FILENO, <shell_pid>). shell_pid is the *current*
     //    process's pid, since we call this function from the main shell process
 
-    // 2nd token fg call is the index of the job to be moved. Use ASCII to int to parse that token
-    int index = atoi(strvec_get(tokens, 1));
-    job_t *toBeResumed = job_list_get(jobs, index);
-    if (toBeResumed == NULL) {
-        fprintf(stderr, "Job index out of bounds\n");
-        strvec_clear(tokens);
-        job_list_free(jobs);
-        return 1;
-    }
-    // Send to be resumed to the foreground
-    tcsetpgrp(STDIN_FILENO, toBeResumed->pid);
-    // Send the continue/resume signal
-    kill(toBeResumed->pid, SIGCONT);
+    if (is_foreground) {
+        // 2nd token fg call is the index of the job to be moved. Use ASCII to int to parse that
+        // token
+        int index = atoi(strvec_get(tokens, 1));
+        job_t *toBeResumed = job_list_get(jobs, index);
+        if (toBeResumed == NULL) {
+            fprintf(stderr, "Job index out of bounds\n");
+            strvec_clear(tokens);
+            job_list_free(jobs);
+            return -1;
+        }
+        // Send to be resumed to the foreground
+        tcsetpgrp(STDIN_FILENO, toBeResumed->pid);
+        // Send the continue/resume signal
+        kill(toBeResumed->pid, SIGCONT);
 
-    // Repeated code from main() to wait for process to exit
-    int status;
-    // waits for child process to terminate
-    if (waitpid(toBeResumed->pid, &status, WUNTRACED) == -1) {
-        perror("waitpid");
-        strvec_clear(tokens);
-        job_list_free(jobs);
-        return 1;
-    }
+        // Repeated code from main() to wait for process to exit
+        int status;
+        // waits for child process to terminate
+        if (waitpid(toBeResumed->pid, &status, WUNTRACED) == -1) {
+            perror("waitpid");
+            strvec_clear(tokens);
+            job_list_free(jobs);
+            return -1;
+        }
 
-    if (WIFEXITED(status)) {
-        job_list_remove(jobs, index);    // remove jobs that have exited
-    }
+        if (WIFEXITED(status)) {
+            job_list_remove(jobs, index);    // remove jobs that have exited
+        }
 
-    pid_t ppid = getpid();
-    if (tcsetpgrp(STDIN_FILENO, ppid) == -1) {    // restore the shell process to the foreground
-        perror("tcsetpgrp");
-        strvec_clear(tokens);
-        job_list_free(jobs);
-        return 1;
+        pid_t ppid = getpid();
+        if (tcsetpgrp(STDIN_FILENO, ppid) == -1) {    // restore the shell process to the foreground
+            perror("tcsetpgrp");
+            strvec_clear(tokens);
+            job_list_free(jobs);
+            return -1;
+        }
     }
 
     // TODO Task 6: Implement the ability to resume stopped jobs in the background.
