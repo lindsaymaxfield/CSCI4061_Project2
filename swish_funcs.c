@@ -188,9 +188,19 @@ int resume_job(strvec_t *tokens, job_list_t *jobs, int is_foreground) {
             return -1;
         }
         // Send to be resumed to the foreground
-        tcsetpgrp(STDIN_FILENO, toBeResumed->pid);
+        if (tcsetpgrp(STDIN_FILENO, toBeResumed->pid) == -1) {
+            perror("tcsetpgrp when resuming stopped process");
+            strvec_clear(tokens);
+            job_list_free(jobs);
+            return -1;
+        }
         // Send the continue/resume signal
-        kill(toBeResumed->pid, SIGCONT);
+        if (kill(toBeResumed->pid, SIGCONT) == -1) {
+            perror("Could not send SIGCONT to resume a process");
+            strvec_clear(tokens);
+            job_list_free(jobs);
+            return -1;
+        }
 
         // Repeated code from main() to wait for process to exit
         int status;
@@ -202,8 +212,9 @@ int resume_job(strvec_t *tokens, job_list_t *jobs, int is_foreground) {
             return -1;
         }
 
-        if (WIFEXITED(status)) {
-            job_list_remove(jobs, index);    // remove jobs that have exited
+        // remove jobs that have not stopped (Been moved to foreground or exited)
+        if (!WIFSTOPPED(status)) {
+            job_list_remove(jobs, index);
         }
 
         pid_t ppid = getpid();
