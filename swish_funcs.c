@@ -281,8 +281,10 @@ int await_background_job(strvec_t *tokens, job_list_t *jobs) {
         return -1;
     }
 
-    // remove jobs that have not stopped (Been moved to foreground or exited)
-    if (!WIFSTOPPED(status)) {
+    // update jobs that have been stopped, remove those which finish
+    if (WIFSTOPPED(status)) {
+        toWaitFor->status = STOPPED;
+    } else {
         job_list_remove(jobs, index);
     }
 
@@ -298,6 +300,22 @@ int await_all_background_jobs(job_list_t *jobs) {
     //    next step (don't attempt to remove it while iterating through the list).
     // 4. Remove all background jobs (which have all just terminated) from jobs list.
     //    Use the job_list_remove_by_status() function.
+
+    int status;
+    for (int i = 0; i < jobs->length; i++) {
+        job_t *currentJob = job_list_get(jobs, i);
+        if (currentJob->status == BACKGROUND) {
+            if (waitpid(currentJob->pid, &status, WUNTRACED) == -1) {
+                perror("waitpid while looping through bg jobs list");
+                job_list_free(jobs);
+                return -1;
+            }
+            if (WIFSTOPPED(status)) {
+                currentJob->status = STOPPED;
+            }
+        }
+    }
+    job_list_remove_by_status(jobs, BACKGROUND);
 
     return 0;
 }
