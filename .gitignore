@@ -1,0 +1,5 @@
+*.txt
+*.json
+test_cases/resources/slow_write.c
+*.o
+*.o

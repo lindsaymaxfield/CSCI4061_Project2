@@ -56,7 +56,7 @@ int main(int argc, char **argv) {
         }
         const char *first_token = strvec_get(&tokens, 0);
 
-        if (strcmp(first_token, "pwd") == 0) { // get the shell's current working directory
+        if (strcmp(first_token, "pwd") == 0) {    // get the shell's current working directory
             // TODO Task 1: Print the shell's current working directory
             // Use the getcwd() system call
             char dir_name[CMD_LEN];
@@ -69,8 +69,8 @@ int main(int argc, char **argv) {
 
             printf("%s\n", dir_name);
         }
-
-        else if (strcmp(first_token, "cd") == 0) { // change the shell's current working directory
+        // change the shell's current working directory
+        else if (strcmp(first_token, "cd") == 0) {
             // TODO Task 1: Change the shell's current working directory
             // Use the chdir() system call
             // If the user supplied an argument (token at index 1), change to that directory
@@ -150,33 +150,40 @@ int main(int argc, char **argv) {
             //   1. Use fork() to spawn a child process
             //   2. Call run_command() in the child process
             //   2. In the parent, use waitpid() to wait for the program to exit
+            int status;
             pid_t pid = fork();
-            if (pid < 0) { // an error occurred
+            if (pid < 0) {    // an error occurred
                 perror("fork");
                 strvec_clear(&tokens);
                 job_list_free(&jobs);
                 return 1;
-            } else if (pid == 0) { // child process
+            } else if (pid == 0) {    // child process
                 run_command(&tokens);
                 strvec_clear(&tokens);
                 job_list_free(&jobs);
-                return 1;
-            } else { // parent process
-                if (tcsetpgrp(STDIN_FILENO, pid) == -1) { // put the child's process group in the foreground
+                exit(1);
+            } else {    // parent process
+                // put the child's process group in the foreground
+                if (tcsetpgrp(STDIN_FILENO, pid) == -1) {
                     perror("tcsetpgrp");
                     strvec_clear(&tokens);
                     job_list_free(&jobs);
                     return 1;
                 }
-                if (waitpid(pid, NULL, 0) == -1) { // waits for child process to terminate
+                if (waitpid(pid, &status, WUNTRACED) ==
+                    -1) {    // waits for child process to terminate
                     perror("waitpid");
                     strvec_clear(&tokens);
                     job_list_free(&jobs);
                     return 1;
                 }
+                if (WIFSTOPPED(status)) {
+                    job_list_add(&jobs, pid, first_token, STOPPED);
+                }
 
                 pid_t ppid = getpid();
-                if (tcsetpgrp(STDIN_FILENO, ppid) == -1) { // restore the shell process to the foreground
+                if (tcsetpgrp(STDIN_FILENO, ppid) ==
+                    -1) {    // restore the shell process to the foreground
                     perror("tcsetpgrp");
                     strvec_clear(&tokens);
                     job_list_free(&jobs);
