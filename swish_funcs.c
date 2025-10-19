@@ -263,6 +263,29 @@ int await_background_job(strvec_t *tokens, job_list_t *jobs) {
     // 3. Use waitpid() to wait for the job to terminate, as you have in resume_job() and main().
     // 4. If the process terminates (is not stopped by a signal) remove it from the jobs list
 
+    int index = atoi(strvec_get(tokens, 1));
+    job_t *toWaitFor = job_list_get(jobs, index);
+
+    if (toWaitFor->status == STOPPED) {
+        fprintf(stderr, "Job index is for stopped process not background process\n");
+        return -1;
+    }
+
+    // Repeated code from main() to wait for process to exit
+    int status;
+    // waits for child process to terminate
+    if (waitpid(toWaitFor->pid, &status, WUNTRACED) == -1) {
+        perror("waitpid");
+        strvec_clear(tokens);
+        job_list_free(jobs);
+        return -1;
+    }
+
+    // remove jobs that have not stopped (Been moved to foreground or exited)
+    if (!WIFSTOPPED(status)) {
+        job_list_remove(jobs, index);
+    }
+
     return 0;
 }
 
