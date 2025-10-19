@@ -45,7 +45,7 @@ int run_command(strvec_t *tokens) {
     // Another Hint: You have a guarantee of the longest possible needed array, so you
     // won't have to use malloc.
     pid_t pid = getpid();
-    if (setpgid(pid, pid) == -1) { // changing child's process group to the child's process ID
+    if (setpgid(pid, pid) == -1) {    // changing child's process group to the child's process ID
         perror("setpgid");
         return -1;
     }
@@ -59,19 +59,24 @@ int run_command(strvec_t *tokens) {
     }
 
     sac.sa_flags = 0;
-    if (sigaction(SIGTTIN, &sac, NULL) == -1 || sigaction(SIGTTOU, &sac, NULL) == -1) { // set the child’s handlers for SIGTTIN and SIGTTOU back to the default
+    if (sigaction(SIGTTIN, &sac, NULL) == -1 ||
+        sigaction(SIGTTOU, &sac, NULL) ==
+            -1) {    // set the child’s handlers for SIGTTIN and SIGTTOU back to the default
         perror("sigaction");
         return -1;
     }
 
-    char *args[MAX_ARGS]; // string array to be filled from the tokens vector
+    char *args[MAX_ARGS];    // string array to be filled from the tokens vector
 
-    int get_next_token = 1; // boolean indicating if the next token should be retrieved from the tokens vector
-    int i = 0; // current index of the tokens vector
+    int get_next_token =
+        1;        // boolean indicating if the next token should be retrieved from the tokens vector
+    int i = 0;    // current index of the tokens vector
 
-    int error = 0; // indicates if an error has occurred and the user should still be reprompted
+    int error = 0;    // indicates if an error has occurred and the user should still be reprompted
 
-    while (get_next_token == 1) { // loop that gets the arguments (not redirection operators) from the tokens vector
+    while (
+        get_next_token ==
+        1) {    // loop that gets the arguments (not redirection operators) from the tokens vector
         char *curr_arg = strvec_get(tokens, i);
         if (curr_arg == NULL) {
             printf("strvec_get\n");
@@ -93,14 +98,15 @@ int run_command(strvec_t *tokens) {
 
     args[i] = NULL;    // adding NULL sentinel
 
-    while (i < tokens->length) { // loop that handles the redirection operators if applicable
+    while (i < tokens->length) {    // loop that handles the redirection operators if applicable
         char *redir_token = strvec_get(tokens, i);
         i++;
         char *file_name = strvec_get(tokens, i);
         i++;
 
         if (strcmp(redir_token, ">") == 0) {    // redirect output
-            int out_fd = open(file_name, O_CREAT | O_TRUNC | O_WRONLY, S_IRUSR | S_IWUSR); // should overwrite file if it already exists
+            int out_fd = open(file_name, O_CREAT | O_TRUNC | O_WRONLY,
+                              S_IRUSR | S_IWUSR);    // should overwrite file if it already exists
             if (out_fd == -1) {
                 perror("Failed to open output file");
                 error = 1;
@@ -120,7 +126,8 @@ int run_command(strvec_t *tokens) {
                 return -1;
             }
         } else if (strcmp(redir_token, ">>") == 0) {    // redirect and append output
-            int out_fd = open(file_name, O_CREAT | O_APPEND | O_WRONLY, S_IRUSR | S_IWUSR); // should append to file if it already exists
+            int out_fd = open(file_name, O_CREAT | O_APPEND | O_WRONLY,
+                              S_IRUSR | S_IWUSR);    // should append to file if it already exists
             if (out_fd == -1) {
                 perror("Failed to open output file");
                 error = 1;
@@ -168,6 +175,42 @@ int resume_job(strvec_t *tokens, job_list_t *jobs, int is_foreground) {
     // 5. If the job has terminated (not stopped), remove it from the 'jobs' list
     // 6. Call tcsetpgrp(STDIN_FILENO, <shell_pid>). shell_pid is the *current*
     //    process's pid, since we call this function from the main shell process
+
+    // 2nd token fg call is the index of the job to be moved. Use ASCII to int to parse that token
+    int index = atoi(strvec_get(tokens, 1));
+    job_t *toBeResumed = job_list_get(jobs, index);
+    if (toBeResumed == NULL) {
+        fprintf(stderr, "Job index out of bounds\n");
+        strvec_clear(tokens);
+        job_list_free(jobs);
+        return 1;
+    }
+    // Send to be resumed to the foreground
+    tcsetpgrp(STDIN_FILENO, toBeResumed->pid);
+    // Send the continue/resume signal
+    kill(toBeResumed->pid, SIGCONT);
+
+    // Repeated code from main() to wait for process to exit
+    int status;
+    // waits for child process to terminate
+    if (waitpid(toBeResumed->pid, &status, WUNTRACED) == -1) {
+        perror("waitpid");
+        strvec_clear(tokens);
+        job_list_free(jobs);
+        return 1;
+    }
+
+    if (WIFEXITED(status)) {
+        job_list_remove(jobs, index);    // remove jobs that have exited
+    }
+
+    pid_t ppid = getpid();
+    if (tcsetpgrp(STDIN_FILENO, ppid) == -1) {    // restore the shell process to the foreground
+        perror("tcsetpgrp");
+        strvec_clear(tokens);
+        job_list_free(jobs);
+        return 1;
+    }
 
     // TODO Task 6: Implement the ability to resume stopped jobs in the background.
     // This really just means omitting some of the steps used to resume a job in the foreground:
