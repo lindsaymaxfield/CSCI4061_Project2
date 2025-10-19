@@ -184,7 +184,6 @@ int resume_job(strvec_t *tokens, job_list_t *jobs, int is_foreground) {
         if (toBeResumed == NULL) {
             fprintf(stderr, "Job index out of bounds\n");
             strvec_clear(tokens);
-            job_list_free(jobs);
             return -1;
         }
         // Send to be resumed to the foreground
