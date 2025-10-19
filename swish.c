@@ -153,19 +153,11 @@ int main(int argc, char **argv) {
                     job_list_free(&jobs);
                     return 1;
                 } else if (pid == 0) {    // child process
-                    job_list_add(&jobs, pid, first_token, BACKGROUND);
                     run_command(&tokens);
                     strvec_clear(&tokens);
                     exit(1);
-                } else {    // parent process
-                    pid_t ppid = getpid();
-                    if (tcsetpgrp(STDIN_FILENO, ppid) ==
-                        -1) {    // restore the shell process to the foreground
-                        perror("tcsetpgrp");
-                        strvec_clear(&tokens);
-                        job_list_free(&jobs);
-                        return 1;
-                    }
+                } else {
+                    job_list_add(&jobs, pid, first_token, BACKGROUND);
                 }
 
             } else {
