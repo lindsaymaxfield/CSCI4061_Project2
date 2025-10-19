@@ -223,8 +223,28 @@ int resume_job(strvec_t *tokens, job_list_t *jobs, int is_foreground) {
             job_list_free(jobs);
             return -1;
         }
-    }
+    } else if (is_foreground == 0) {
+        // 2nd token in bg call is the index of the job to be moved. Use ASCII to int to parse it
+        int index = atoi(strvec_get(tokens, 1));
+        job_t *toBeResumed = job_list_get(jobs, index);
+        if (toBeResumed == NULL) {
+            fprintf(stderr, "Job index out of bounds\n");
+            strvec_clear(tokens);
+            return -1;
+        }
 
+        toBeResumed->status = BACKGROUND;
+        // Send the continue/resume signal
+        if (kill(toBeResumed->pid, SIGCONT) == -1) {
+            perror("Could not send SIGCONT to resume a process");
+            strvec_clear(tokens);
+            job_list_free(jobs);
+            return -1;
+        }
+
+    } else {
+        return -1;
+    }
     // TODO Task 6: Implement the ability to resume stopped jobs in the background.
     // This really just means omitting some of the steps used to resume a job in the foreground:
     // 1. DO NOT call tcsetpgrp() to manipulate foreground/background terminal process group

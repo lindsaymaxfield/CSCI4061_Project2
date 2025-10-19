@@ -143,54 +143,80 @@ int main(int argc, char **argv) {
         }
 
         else {
-            // TODO Task 2: If the user input does not match any built-in shell command,
-            // treat the input as a program name and command-line arguments
-            // USE THE run_command() FUNCTION DEFINED IN swish_funcs.c IN YOUR IMPLEMENTATION
-            // You should take the following steps:
-            //   1. Use fork() to spawn a child process
-            //   2. Call run_command() in the child process
-            //   2. In the parent, use waitpid() to wait for the program to exit
-            int status;
-            pid_t pid = fork();
-            if (pid < 0) {    // an error occurred
-                perror("fork");
-                strvec_clear(&tokens);
-                job_list_free(&jobs);
-                return 1;
-            } else if (pid == 0) {    // child process
-                run_command(&tokens);
-                strvec_clear(&tokens);
-                job_list_free(&jobs);
-                exit(1);
-            } else {    // parent process
-                // put the child's process group in the foreground
-                if (tcsetpgrp(STDIN_FILENO, pid) == -1) {
-                    perror("tcsetpgrp");
+            const char *last_token = strvec_get(&tokens, tokens.length - 1);
+            if (strcmp(last_token, "&") == 0) {
+                strvec_take(&tokens, tokens.length - 1);
+                pid_t pid = fork();
+                if (pid < 0) {    // an error occurred
+                    perror("fork");
                     strvec_clear(&tokens);
                     job_list_free(&jobs);
                     return 1;
-                }
-                if (waitpid(pid, &status, WUNTRACED) ==
-                    -1) {    // waits for child process to terminate
-                    perror("waitpid");
+                } else if (pid == 0) {    // child process
+                    job_list_add(&jobs, pid, first_token, BACKGROUND);
+                    run_command(&tokens);
                     strvec_clear(&tokens);
-                    job_list_free(&jobs);
-                    return 1;
-                }
-                if (WIFSTOPPED(status)) {
-                    job_list_add(&jobs, pid, first_token, STOPPED);
+                    exit(1);
+                } else {    // parent process
+                    pid_t ppid = getpid();
+                    if (tcsetpgrp(STDIN_FILENO, ppid) ==
+                        -1) {    // restore the shell process to the foreground
+                        perror("tcsetpgrp");
+                        strvec_clear(&tokens);
+                        job_list_free(&jobs);
+                        return 1;
+                    }
                 }
 
-                pid_t ppid = getpid();
-                if (tcsetpgrp(STDIN_FILENO, ppid) ==
-                    -1) {    // restore the shell process to the foreground
-                    perror("tcsetpgrp");
+            } else {
+                // TODO Task 2: If the user input does not match any built-in shell command,
+                // treat the input as a program name and command-line arguments
+                // USE THE run_command() FUNCTION DEFINED IN swish_funcs.c IN YOUR IMPLEMENTATION
+                // You should take the following steps:
+                //   1. Use fork() to spawn a child process
+                //   2. Call run_command() in the child process
+                //   2. In the parent, use waitpid() to wait for the program to exit
+                int status;
+                pid_t pid = fork();
+                if (pid < 0) {    // an error occurred
+                    perror("fork");
                     strvec_clear(&tokens);
                     job_list_free(&jobs);
                     return 1;
+                } else if (pid == 0) {    // child process
+                    run_command(&tokens);
+                    strvec_clear(&tokens);
+                    job_list_free(&jobs);
+                    exit(1);
+                } else {    // parent process
+                    // put the child's process group in the foreground
+                    if (tcsetpgrp(STDIN_FILENO, pid) == -1) {
+                        perror("tcsetpgrp");
+                        strvec_clear(&tokens);
+                        job_list_free(&jobs);
+                        return 1;
+                    }
+                    if (waitpid(pid, &status, WUNTRACED) ==
+                        -1) {    // waits for child process to terminate
+                        perror("waitpid");
+                        strvec_clear(&tokens);
+                        job_list_free(&jobs);
+                        return 1;
+                    }
+                    if (WIFSTOPPED(status)) {
+                        job_list_add(&jobs, pid, first_token, STOPPED);
+                    }
+
+                    pid_t ppid = getpid();
+                    if (tcsetpgrp(STDIN_FILENO, ppid) ==
+                        -1) {    // restore the shell process to the foreground
+                        perror("tcsetpgrp");
+                        strvec_clear(&tokens);
+                        job_list_free(&jobs);
+                        return 1;
+                    }
                 }
             }
-
             // TODO Task 4: Set the child process as the target of signals sent to the terminal
             // via the keyboard.
             // To do this, call 'tcsetpgrp(STDIN_FILENO, <child_pid>)', where child_pid is the
