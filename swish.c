@@ -156,7 +156,7 @@ int main(int argc, char **argv) {
                     run_command(&tokens);
                     strvec_clear(&tokens);
                     exit(1);
-                } else {
+                } else { // parent process
                     job_list_add(&jobs, pid, first_token, BACKGROUND);
                 }
 

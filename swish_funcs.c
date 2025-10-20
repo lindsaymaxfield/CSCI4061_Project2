@@ -19,16 +19,10 @@
 #define MAX_ARGS 10
 
 int tokenize(char *s, strvec_t *tokens) {
-    // TODO Task 0: Tokenize string s
-    // Assume each token is separated by a single space (" ")
-    // Use the strtok() function to accomplish this
-    // Add each token to the 'tokens' parameter (a string vector)
-    // Return 0 on success, -1 on error
-
     char *token = strtok(s, " ");    // specify the string to parse for the first call to strtok
     while (token != NULL) {
         if (strvec_add(tokens, token) == -1) {
-            printf("strvec_add\n");
+            fprintf(stderr, "strvec_add\n");
             return -1;
         }
         token = strtok(NULL, " ");    // call strtok repeatedly until NULL is returned
@@ -38,12 +32,6 @@ int tokenize(char *s, strvec_t *tokens) {
 }
 
 int run_command(strvec_t *tokens) {
-    // TODO Task 2: Execute the specified program (token 0) with the
-    // specified command-line arguments
-    // THIS FUNCTION SHOULD BE CALLED FROM A CHILD OF THE MAIN SHELL PROCESS
-    // Hint: Build a string array from the 'tokens' vector and pass this into execvp()
-    // Another Hint: You have a guarantee of the longest possible needed array, so you
-    // won't have to use malloc.
     pid_t pid = getpid();
     if (setpgid(pid, pid) == -1) {    // changing child's process group to the child's process ID
         perror("setpgid");
@@ -79,7 +67,7 @@ int run_command(strvec_t *tokens) {
         1) {    // loop that gets the arguments (not redirection operators) from the tokens vector
         char *curr_arg = strvec_get(tokens, i);
         if (curr_arg == NULL) {
-            printf("strvec_get\n");
+            fprintf(stderr, "strvec_get\n");
             return -1;
         }
 
@@ -145,22 +133,6 @@ int run_command(strvec_t *tokens) {
         return -1;
     }
 
-    // TODO Task 3: Extend this function to perform output redirection before exec()'ing
-    // Check for '<' (redirect input), '>' (redirect output), '>>' (redirect and append output)
-    // entries inside of 'tokens' (the strvec_find() function will do this for you)
-    // Open the necessary file for reading (<), writing (>), or appending (>>)
-    // Use dup2() to redirect stdin (<), stdout (> or >>)
-    // DO NOT pass redirection operators and file names to exec()'d program
-    // E.g., "ls -l > out.txt" should be exec()'d with strings "ls", "-l", NULL
-
-    // TODO Task 4: You need to do two items of setup before exec()'ing
-    // 1. Restore the signal handlers for SIGTTOU and SIGTTIN to their defaults.
-    // The code in main() within swish.c sets these handlers to the SIG_IGN value.
-    // Adapt this code to use sigaction() to set the handlers to the SIG_DFL value.
-    // 2. Change the process group of this process (a child of the main shell).
-    // Call getpid() to get its process ID then call setpgid() and use this process
-    // ID as the value for the new process group ID
-
     return 0;
 }
 
@@ -183,21 +155,16 @@ int resume_job(strvec_t *tokens, job_list_t *jobs, int is_foreground) {
         job_t *toBeResumed = job_list_get(jobs, index);
         if (toBeResumed == NULL) {
             fprintf(stderr, "Job index out of bounds\n");
-            strvec_clear(tokens);
             return -1;
         }
         // Send to be resumed to the foreground
         if (tcsetpgrp(STDIN_FILENO, toBeResumed->pid) == -1) {
             perror("tcsetpgrp when resuming stopped process");
-            strvec_clear(tokens);
-            job_list_free(jobs);
             return -1;
         }
         // Send the continue/resume signal
         if (kill(toBeResumed->pid, SIGCONT) == -1) {
             perror("Could not send SIGCONT to resume a process");
-            strvec_clear(tokens);
-            job_list_free(jobs);
             return -1;
         }
 
@@ -206,8 +173,6 @@ int resume_job(strvec_t *tokens, job_list_t *jobs, int is_foreground) {
         // waits for child process to terminate
         if (waitpid(toBeResumed->pid, &status, WUNTRACED) == -1) {
             perror("waitpid");
-            strvec_clear(tokens);
-            job_list_free(jobs);
             return -1;
         }
 
@@ -219,8 +184,6 @@ int resume_job(strvec_t *tokens, job_list_t *jobs, int is_foreground) {
         pid_t ppid = getpid();
         if (tcsetpgrp(STDIN_FILENO, ppid) == -1) {    // restore the shell process to the foreground
             perror("tcsetpgrp");
-            strvec_clear(tokens);
-            job_list_free(jobs);
             return -1;
         }
     } else if (is_foreground == 0) {
@@ -229,7 +192,6 @@ int resume_job(strvec_t *tokens, job_list_t *jobs, int is_foreground) {
         job_t *toBeResumed = job_list_get(jobs, index);
         if (toBeResumed == NULL) {
             fprintf(stderr, "Job index out of bounds\n");
-            strvec_clear(tokens);
             return -1;
         }
 
@@ -237,8 +199,6 @@ int resume_job(strvec_t *tokens, job_list_t *jobs, int is_foreground) {
         // Send the continue/resume signal
         if (kill(toBeResumed->pid, SIGCONT) == -1) {
             perror("Could not send SIGCONT to resume a process");
-            strvec_clear(tokens);
-            job_list_free(jobs);
             return -1;
         }
 
@@ -276,8 +236,6 @@ int await_background_job(strvec_t *tokens, job_list_t *jobs) {
     // waits for child process to terminate
     if (waitpid(toWaitFor->pid, &status, WUNTRACED) == -1) {
         perror("waitpid");
-        strvec_clear(tokens);
-        job_list_free(jobs);
         return -1;
     }
 
@@ -307,7 +265,6 @@ int await_all_background_jobs(job_list_t *jobs) {
         if (currentJob->status == BACKGROUND) {
             if (waitpid(currentJob->pid, &status, WUNTRACED) == -1) {
                 perror("waitpid while looping through bg jobs list");
-                job_list_free(jobs);
                 return -1;
             }
             if (WIFSTOPPED(status)) {
