@@ -138,8 +138,7 @@ int run_command(strvec_t *tokens) {
 
 int resume_job(strvec_t *tokens, job_list_t *jobs, int is_foreground) {
     if (is_foreground) {
-        // 2nd token fg call is the index of the job to be moved. Use ASCII to int to parse that
-        // token
+        // 2nd token fg call is the index of the job to be moved. Use ASCII to int to parse it
         char *second_token = strvec_get(tokens, 1);
         if (second_token == NULL) {
             fprintf(stderr, "Failed to get token from token vector");
