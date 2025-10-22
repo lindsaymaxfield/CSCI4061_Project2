@@ -22,7 +22,7 @@ int tokenize(char *s, strvec_t *tokens) {
     char *token = strtok(s, " ");    // specify the string to parse for the first call to strtok
     while (token != NULL) {
         if (strvec_add(tokens, token) == -1) {
-            fprintf(stderr, "strvec_add\n");
+            fprintf(stderr, "Failed to add token to tokens vector\n");
             return -1;
         }
         token = strtok(NULL, " ");    // call strtok repeatedly until NULL is returned
@@ -60,14 +60,12 @@ int run_command(strvec_t *tokens) {
         1;        // boolean indicating if the next token should be retrieved from the tokens vector
     int i = 0;    // current index of the tokens vector
 
-    int error = 0;    // indicates if an error has occurred and the user should still be reprompted
-
     while (
         get_next_token ==
         1) {    // loop that gets the arguments (not redirection operators) from the tokens vector
         char *curr_arg = strvec_get(tokens, i);
         if (curr_arg == NULL) {
-            fprintf(stderr, "strvec_get\n");
+            fprintf(stderr, "Failed to get token from tokens vector\n");
             return -1;
         }
 
@@ -88,8 +86,14 @@ int run_command(strvec_t *tokens) {
 
     while (i < tokens->length) {    // loop that handles the redirection operators if applicable
         char *redir_token = strvec_get(tokens, i);
+        if (redir_token == NULL) {
+            fprintf(stderr, "Failed to get token from tokens vector");
+        }
         i++;
         char *file_name = strvec_get(tokens, i);
+        if (file_name == NULL) {
+            fprintf(stderr, "Failed to get token from tokens vector");
+        }
         i++;
 
         if (strcmp(redir_token, ">") == 0) {    // redirect output
@@ -97,7 +101,7 @@ int run_command(strvec_t *tokens) {
                               S_IRUSR | S_IWUSR);    // should overwrite file if it already exists
             if (out_fd == -1) {
                 perror("Failed to open output file");
-                error = 1;
+                return -1;
             } else if (dup2(out_fd, STDOUT_FILENO) == -1) {
                 perror("dup2");
                 close(out_fd);
@@ -107,7 +111,7 @@ int run_command(strvec_t *tokens) {
             int in_fd = open(file_name, O_RDONLY);
             if (in_fd == -1) {
                 perror("Failed to open input file");
-                error = 1;
+                return -1;
             } else if (dup2(in_fd, STDIN_FILENO) == -1) {
                 perror("dup2");
                 close(in_fd);
@@ -118,7 +122,7 @@ int run_command(strvec_t *tokens) {
                               S_IRUSR | S_IWUSR);    // should append to file if it already exists
             if (out_fd == -1) {
                 perror("Failed to open output file");
-                error = 1;
+                return -1;
             } else if (dup2(out_fd, STDOUT_FILENO) == -1) {
                 perror("dup2");
                 close(out_fd);
@@ -127,31 +131,21 @@ int run_command(strvec_t *tokens) {
         }
     }
 
-    if (error == 0) {
-        execvp(args[0], args);
-        perror("exec");
-        return -1;
-    }
-
-    return 0;
+    execvp(args[0], args);
+    perror("exec");
+    return -1;
 }
 
 int resume_job(strvec_t *tokens, job_list_t *jobs, int is_foreground) {
-    // TODO Task 5: Implement the ability to resume stopped jobs in the foreground
-    // 1. Look up the relevant job information (in a job_t) from the jobs list
-    //    using the index supplied by the user (in tokens index 1)
-    //    Feel free to use sscanf() or atoi() to convert this string to an int
-    // 2. Call tcsetpgrp(STDIN_FILENO, <job_pid>) where job_pid is the job's process ID
-    // 3. Send the process the SIGCONT signal with the kill() system call
-    // 4. Use the same waitpid() logic as in main -- don't forget WUNTRACED
-    // 5. If the job has terminated (not stopped), remove it from the 'jobs' list
-    // 6. Call tcsetpgrp(STDIN_FILENO, <shell_pid>). shell_pid is the *current*
-    //    process's pid, since we call this function from the main shell process
-
     if (is_foreground) {
         // 2nd token fg call is the index of the job to be moved. Use ASCII to int to parse that
         // token
-        int index = atoi(strvec_get(tokens, 1));
+        char *second_token = strvec_get(tokens, 1);
+        if (second_token == NULL) {
+            fprintf(stderr, "Failed to get token from token vector");
+            return -1;
+        }
+        int index = atoi(second_token);
         job_t *toBeResumed = job_list_get(jobs, index);
         if (toBeResumed == NULL) {
             fprintf(stderr, "Job index out of bounds\n");
@@ -170,15 +164,17 @@ int resume_job(strvec_t *tokens, job_list_t *jobs, int is_foreground) {
 
         // Repeated code from main() to wait for process to exit
         int status;
-        // waits for child process to terminate
+        // Waits for child process to terminate
         if (waitpid(toBeResumed->pid, &status, WUNTRACED) == -1) {
             perror("waitpid");
             return -1;
         }
 
-        // remove jobs that have not stopped (Been moved to foreground or exited)
+        // Remove jobs that have not stopped (Been moved to foreground or exited)
         if (!WIFSTOPPED(status)) {
-            job_list_remove(jobs, index);
+            if (job_list_remove(jobs, index) == -1) {
+                fprintf(stderr, "Failed to remove job from list");
+            }
         }
 
         pid_t ppid = getpid();
@@ -188,7 +184,12 @@ int resume_job(strvec_t *tokens, job_list_t *jobs, int is_foreground) {
         }
     } else if (is_foreground == 0) {
         // 2nd token in bg call is the index of the job to be moved. Use ASCII to int to parse it
-        int index = atoi(strvec_get(tokens, 1));
+        char *second_token = strvec_get(tokens, 1);
+        if (second_token == NULL) {
+            fprintf(stderr, "Failed to get token from token vector");
+            return -1;
+        }
+        int index = atoi(second_token);
         job_t *toBeResumed = job_list_get(jobs, index);
         if (toBeResumed == NULL) {
             fprintf(stderr, "Job index out of bounds\n");
@@ -205,27 +206,21 @@ int resume_job(strvec_t *tokens, job_list_t *jobs, int is_foreground) {
     } else {
         return -1;
     }
-    // TODO Task 6: Implement the ability to resume stopped jobs in the background.
-    // This really just means omitting some of the steps used to resume a job in the foreground:
-    // 1. DO NOT call tcsetpgrp() to manipulate foreground/background terminal process group
-    // 2. DO NOT call waitpid() to wait on the job
-    // 3. Make sure to modify the 'status' field of the relevant job list entry to BACKGROUND
-    //    (as it was STOPPED before this)
 
     return 0;
 }
 
 int await_background_job(strvec_t *tokens, job_list_t *jobs) {
-    // TODO Task 6: Wait for a specific job to stop or terminate
-    // 1. Look up the relevant job information (in a job_t) from the jobs list
-    //    using the index supplied by the user (in tokens index 1)
-    // 2. Make sure the job's status is BACKGROUND (no sense waiting for a stopped job)
-    // 3. Use waitpid() to wait for the job to terminate, as you have in resume_job() and main().
-    // 4. If the process terminates (is not stopped by a signal) remove it from the jobs list
-
-    int index = atoi(strvec_get(tokens, 1));
+    char *second_token = strvec_get(tokens, 1);
+    if (second_token == NULL) {
+        fprintf(stderr, "Failed to get token from token vector");
+        return -1;
+    }
+    int index = atoi(second_token);
     job_t *toWaitFor = job_list_get(jobs, index);
-
+    if (toWaitFor == NULL) {
+        fprintf(stderr, "Failed to get a job from list");
+    }
     if (toWaitFor->status == STOPPED) {
         fprintf(stderr, "Job index is for stopped process not background process\n");
         return -1;
@@ -233,35 +228,33 @@ int await_background_job(strvec_t *tokens, job_list_t *jobs) {
 
     // Repeated code from main() to wait for process to exit
     int status;
-    // waits for child process to terminate
+    // Waits for child process to terminate
     if (waitpid(toWaitFor->pid, &status, WUNTRACED) == -1) {
         perror("waitpid");
         return -1;
     }
 
-    // update jobs that have been stopped, remove those which finish
+    // Update jobs that have been stopped, remove those which finish
     if (WIFSTOPPED(status)) {
         toWaitFor->status = STOPPED;
     } else {
-        job_list_remove(jobs, index);
+        if (job_list_remove(jobs, index) == -1) {
+            fprintf(stderr, "Failed to remove job from list");
+            return -1;
+        }
     }
 
     return 0;
 }
 
 int await_all_background_jobs(job_list_t *jobs) {
-    // TODO Task 6: Wait for all background jobs to stop or terminate
-    // 1. Iterate through the jobs list, ignoring any stopped jobs
-    // 2. For a background job, call waitpid() with WUNTRACED.
-    // 3. If the job has stopped (check with WIFSTOPPED), change its
-    //    status to STOPPED. If the job has terminated, do nothing until the
-    //    next step (don't attempt to remove it while iterating through the list).
-    // 4. Remove all background jobs (which have all just terminated) from jobs list.
-    //    Use the job_list_remove_by_status() function.
-
     int status;
     for (int i = 0; i < jobs->length; i++) {
         job_t *currentJob = job_list_get(jobs, i);
+        if (currentJob == NULL) {
+            fprintf(stderr, "Failed to get a job from list");
+            return -1;
+        }
         if (currentJob->status == BACKGROUND) {
             if (waitpid(currentJob->pid, &status, WUNTRACED) == -1) {
                 perror("waitpid while looping through bg jobs list");
