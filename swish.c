@@ -150,7 +150,7 @@ int main(int argc, char **argv) {
                     strvec_clear(&tokens);
                     job_list_free(&jobs);
                     exit(1);
-                } else { // parent process
+                } else {    // parent process
                     job_list_add(&jobs, pid, first_token, BACKGROUND);
                 }
 
@@ -175,15 +175,15 @@ int main(int argc, char **argv) {
                         job_list_free(&jobs);
                         return 1;
                     }
-                    if (waitpid(pid, &status, WUNTRACED) ==
-                        -1) {    // waits for child process to terminate
+                    // waits for child process to terminate
+                    if (waitpid(pid, &status, WUNTRACED) == -1) {
                         perror("waitpid");
                         strvec_clear(&tokens);
                         job_list_free(&jobs);
                         return 1;
                     }
                     if (WIFSTOPPED(status)) {
-                        if (job_list_add(&jobs, pid, first_token, STOPPED) == -1 ) {
+                        if (job_list_add(&jobs, pid, first_token, STOPPED) == -1) {
                             printf("Failed to add to job list\n");
                             strvec_clear(&tokens);
                             job_list_free(&jobs);
@@ -192,8 +192,8 @@ int main(int argc, char **argv) {
                     }
 
                     pid_t ppid = getpid();
-                    if (tcsetpgrp(STDIN_FILENO, ppid) ==
-                        -1) {    // restore the shell process to the foreground
+                    // restore the shell process to the foreground
+                    if (tcsetpgrp(STDIN_FILENO, ppid) == -1) {
                         perror("tcsetpgrp");
                         strvec_clear(&tokens);
                         job_list_free(&jobs);

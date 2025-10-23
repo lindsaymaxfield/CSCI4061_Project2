@@ -56,13 +56,12 @@ int run_command(strvec_t *tokens) {
 
     char *args[MAX_ARGS];    // string array to be filled from the tokens vector
 
-    int get_next_token =
-        1;        // boolean indicating if the next token should be retrieved from the tokens vector
+    // boolean indicating if the next token should be retrieved from the tokens vector
+    int get_next_token = 1;
     int i = 0;    // current index of the tokens vector
 
-    while (
-        get_next_token ==
-        1) {    // loop that gets the arguments (not redirection operators) from the tokens vector
+    // loop that gets the arguments (not redirection operators) from the tokens vector
+    while (get_next_token == 1) {
         char *curr_arg = strvec_get(tokens, i);
         if (curr_arg == NULL) {
             fprintf(stderr, "Failed to get token from tokens vector\n");
@@ -219,6 +218,7 @@ int await_background_job(strvec_t *tokens, job_list_t *jobs) {
     job_t *toWaitFor = job_list_get(jobs, index);
     if (toWaitFor == NULL) {
         fprintf(stderr, "Failed to get a job from list");
+        return -1;
     }
     if (toWaitFor->status == STOPPED) {
         fprintf(stderr, "Job index is for stopped process not background process\n");
