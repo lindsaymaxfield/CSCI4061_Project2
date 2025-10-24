@@ -14,6 +14,9 @@
 #define CMD_LEN 512
 #define PROMPT "@> "
 
+/**
+ * Main function to run Simple Working Implementation Shell (swish):
+ */
 int main(int argc, char **argv) {
     struct sigaction sac;
     sac.sa_handler = SIG_IGN;
@@ -151,7 +154,12 @@ int main(int argc, char **argv) {
                     job_list_free(&jobs);
                     exit(1);
                 } else {    // parent process
-                    job_list_add(&jobs, pid, first_token, BACKGROUND);
+                    if (job_list_add(&jobs, pid, first_token, BACKGROUND) == -1) {
+                        printf("Failed to add to job list\n");
+                        strvec_clear(&tokens);
+                        job_list_free(&jobs);
+                        return 1;
+                    }
                 }
 
             } else {

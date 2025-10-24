@@ -47,9 +47,8 @@ int run_command(strvec_t *tokens) {
     }
 
     sac.sa_flags = 0;
-    if (sigaction(SIGTTIN, &sac, NULL) == -1 ||
-        sigaction(SIGTTOU, &sac, NULL) ==
-            -1) {    // set the child’s handlers for SIGTTIN and SIGTTOU back to the default
+    // set the child’s handlers for SIGTTIN and SIGTTOU back to the default
+    if (sigaction(SIGTTIN, &sac, NULL) == -1 || sigaction(SIGTTOU, &sac, NULL) == -1) {
         perror("sigaction");
         return -1;
     }
@@ -184,7 +183,7 @@ int resume_job(strvec_t *tokens, job_list_t *jobs, int is_foreground) {
         // 2nd token in bg call is the index of the job to be moved. Use ASCII to int to parse it
         char *second_token = strvec_get(tokens, 1);
         if (second_token == NULL) {
-            fprintf(stderr, "Failed to get token from token vector");
+            fprintf(stderr, "Failed to get token from token vector\n");
             return -1;
         }
         int index = atoi(second_token);
